@@ -94,7 +94,7 @@ jobs:
           }
           EOF
 
-      # 🔐 Decode Keystore (macOS compatible)
+      # 🔐 Decode Keystore
       - name: Decode Keystore
         run: |
           cd "$sanitized_project_name/android/app"
@@ -110,6 +110,40 @@ jobs:
           echo "keyPassword=${{ secrets.KEY_PASSWORD }}" >> key.properties
           echo "keyAlias=${{ secrets.KEY_ALIAS }}" >> key.properties
           echo "storeFile=app/release-key.jks" >> key.properties
+
+      # 🔐 Configure Signing in build.gradle.kts
+      - name: Configure Signing in build.gradle.kts
+        run: |
+          cd "$sanitized_project_name/android/app"
+
+          cat <<'EOF' >> build.gradle.kts
+
+          import java.util.Properties
+          import java.io.FileInputStream
+
+          val keystoreProperties = Properties()
+          val keystorePropertiesFile = rootProject.file("key.properties")
+          if (keystorePropertiesFile.exists()) {
+              keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+          }
+
+          android {
+              signingConfigs {
+                  create("release") {
+                      keyAlias = keystoreProperties["keyAlias"] as String
+                      keyPassword = keystoreProperties["keyPassword"] as String
+                      storeFile = file(keystoreProperties["storeFile"] as String)
+                      storePassword = keystoreProperties["storePassword"] as String
+                  }
+              }
+
+              buildTypes {
+                  getByName("release") {
+                      signingConfig = signingConfigs.getByName("release")
+                  }
+              }
+          }
+          EOF
 
       - name: Build Android APK
         run: |
