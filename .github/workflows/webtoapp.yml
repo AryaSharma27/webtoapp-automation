@@ -95,6 +95,23 @@ jobs:
           }
           EOF
 
+      # 🔐 Decode Keystore
+      - name: Decode Keystore
+        run: |
+          cd "$sanitized_project_name/android/app"
+          echo "${{ secrets.KEYSTORE_BASE64 }}" > keystore.b64
+          base64 --decode keystore.b64 > release-key.jks
+          rm keystore.b64
+
+      # 🔐 Create key.properties
+      - name: Create key.properties
+        run: |
+          cd "$sanitized_project_name/android"
+          echo "storePassword=${{ secrets.KEYSTORE_PASSWORD }}" > key.properties
+          echo "keyPassword=${{ secrets.KEY_PASSWORD }}" >> key.properties
+          echo "keyAlias=${{ secrets.KEY_ALIAS }}" >> key.properties
+          echo "storeFile=app/release-key.jks" >> key.properties
+
       - name: Build Android APK
         run: |
           cd "$sanitized_project_name"
