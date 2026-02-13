@@ -1,0 +1,758 @@
+name: Create Flutter Project and Branch
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  create_project:
+    name: Create Flutter Project and New Branch
+    runs-on: macos-latest  # macOS is required for iOS builds
+
+    steps:
+      # Step 1: Checkout the repository
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      - name: Set up Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+
+
+      # Step 2: Install Flutter
+      - name: Install Flutter
+        uses: britannio/action-install-flutter@v1.1
+        with:
+          version: 'stable'  # Specify Flutter version or use default stable
+
+      - name: Create Flutter project
+        run: |
+            # Use the workflow_dispatch input if available, otherwise use a default value
+            project_name="Propero"
+
+            # Initialize sanitized_project_name
+            sanitized_project_name="$project_name"
+
+            # Check if the project name contains spaces
+            if [[ "$project_name" == *" "* ]]; then
+              # Remove spaces from the project name
+              sanitized_project_name=$(echo "$sanitized_project_name" | tr -d ' ')
+            fi
+
+            # Check if the project name contains uppercase letters
+            if [[ "$sanitized_project_name" =~ [A-Z] ]]; then
+              # Convert to lowercase
+              sanitized_project_name=$(echo "$sanitized_project_name" | tr '[:upper:]' '[:lower:]')
+            fi
+
+            # Create the Flutter project with the sanitized name
+            flutter create --org com.propero "$sanitized_project_name"
+
+            # Save sanitized name to a file for later steps
+            echo "sanitized_project_name=$sanitized_project_name" >> $GITHUB_ENV
+
+      # configuring the singing in gradle
+
+      - name: Configure Signing in Gradle
+        run: |
+          cd "$sanitized_project_name/android/app"
+
+          echo "storePassword=Propero@123" > key.properties
+          echo "keyPassword=Propero@123" >> key.properties
+          echo "keyAlias=your-alias" >> key.properties
+          echo "storeFile=webtoapp.jks" >> key.properties
+
+      # generate key store file
+      - name: Generate Keystore File
+        run: |
+          cd "$sanitized_project_name/android/app"
+
+          keytool -genkey -v \
+          -keystore webtoapp.jks \
+           -keyalg RSA \
+           -keysize 2048 \
+          -validity 10000 \
+          -alias your-alias \
+          -dname "CN=Your Name, OU=Your Org, O=Your Company, L=City, S=State, C=IN" \
+          -storepass Propero@123 \
+          -keypass Propero@123
+
+      # modify build.gradle
+      - name: Update build.gradle for Release Signing
+        run: |
+          cd "$sanitized_project_name/android/app"
+
+          cat <<EOF >> build.gradle
+
+          def keystoreProperties = new Properties()
+          def keystorePropertiesFile = rootProject.file("app/key.properties")
+          if (keystorePropertiesFile.exists()) {
+          keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+          }
+
+          android {
+          signingConfigs {
+          release {
+            keyAlias keystoreProperties['keyAlias']
+            keyPassword keystoreProperties['keyPassword']
+            storeFile file(keystoreProperties['storeFile'])
+            storePassword keystoreProperties['storePassword']
+          }
+          }
+
+          buildTypes {
+          release {
+            signingConfig signingConfigs.release
+          }
+          }
+          }
+          EOF
+
+
+  
+
+      # Add dependencies to pubspec.yaml
+      - name: Add dependencies to pubspec.yaml
+        run: |
+            cd "$sanitized_project_name"
+
+            # Check if 'dependencies:' exists and if not, add it
+            if ! grep -q "dependencies:" pubspec.yaml; then
+                echo "dependencies:" >> pubspec.yaml  
+            fi
+
+            # Add 'webview_flutter' correctly under the 'dependencies:' section
+            if ! grep -q "webview_flutter" pubspec.yaml; then
+                # Use proper syntax for inserting after a line
+                sed -i '' -e '/dependencies:/a\
+              webview_flutter: ^4.10.0' pubspec.yaml
+            fi
+
+            # Add 'onesignal_flutter' correctly under the 'dependencies:' section
+            if ! grep -q "onesignal_flutter" pubspec.yaml; then
+                sed -i '' -e '/dependencies:/a\
+              onesignal_flutter: ^5.2.7' pubspec.yaml
+            fi
+
+            # Add 'flutter_launcher_icons' to 'dev_dependencies:'
+            if ! grep -q "flutter_launcher_icons:" pubspec.yaml; then
+                sed -i '' -e '/dev_dependencies:/a\
+              flutter_launcher_icons: ^0.13.1' pubspec.yaml
+            else
+                echo "flutter_launcher_icons is already added."
+            fi
+
+            # Add 'flutter_icons:' at the root level
+            if ! grep -q "flutter_icons:" pubspec.yaml; then
+                echo >> pubspec.yaml
+                echo "flutter_icons:" >> pubspec.yaml
+                echo "  image_path: 'assets/images.png'" >> pubspec.yaml
+                echo "  android: true" >> pubspec.yaml
+                echo "  ios: true" >> pubspec.yaml
+            else
+                echo "flutter_icons is already configured."
+            fi
+
+            # Add 'assets:' under 'flutter:'
+            image_path="assets/images.png"
+
+            if ! grep -q "assets:" pubspec.yaml; then
+                # If 'assets:' doesn't exist, add it under 'flutter:'
+                sed -i '' -e "/flutter:/a\\
+                                    assets:\\
+                                    - $image_path" pubspec.yaml
+            else
+                # If 'assets:' exists but is commented out, uncomment it and append the image path
+                if grep -q "# assets:" pubspec.yaml; then
+                    sed -i '' 's/# assets:/assets:/g' pubspec.yaml
+                fi
+                # Ensure the image path is appended under the 'assets:' section
+                if ! grep -q "- $image_path" pubspec.yaml; then
+                    sed -i '' -e "/assets:/a\\
+                         - $image_path" pubspec.yaml
+                fi
+            fi
+
+            echo "pubspec.yaml updated"
+
+
+
+
+
+      # Step 4: Create an 'assets' directory in the project
+      - name: Create assets directory
+        run: |
+          # Ensure we're in the correct directory
+          cd "$sanitized_project_name"
+
+          # Create the assets directory
+          mkdir -p assets
+          # Check if the user has uploaded an image
+          if [ -f "../uploaded-images/images.png" ]; then
+            # Move the uploaded image to the assets directory
+            cp ../uploaded-images/images.png assets/images.png
+            echo "User-provided image added to assets."
+          else
+            echo "Error: No user-provided image found! Please upload your image to the 'uploaded-images/images.png' path."
+            exit 1
+          fi
+
+      - name: Verify assets directory
+        run: |
+          # Ensure we're in the correct project directory
+          cd "$sanitized_project_name"
+          # Check if the assets directory exists
+          if [ -d "assets" ]; then
+            echo "Assets directory exists."
+          else
+            echo "Assets directory does not exist."
+          fi
+
+      - name: Modify main.dart and add additional Dart files
+        run: |
+          cd "$sanitized_project_name/lib"
+          # main.dart
+          cat <<EOF > main.dart
+          import 'package:flutter/material.dart';
+          import 'package:onesignal_flutter/onesignal_flutter.dart';
+          import 'basicapp.dart';
+          //import 'splash_screen.dart';
+
+          void main() {
+            WidgetsFlutterBinding.ensureInitialized();
+            runApp(const MyApp());
+          }
+
+          class MyApp extends StatelessWidget {
+            const MyApp({super.key});
+            @override
+            Widget build(BuildContext context) {
+              return const MaterialApp(
+                debugShowCheckedModeBanner: false,
+                home: SplashScreen(), // Show SplashScreen initially
+              );
+            }
+          }
+          EOF
+          echo "main.dart updated"
+          cat <<'EOF' > basicapp.dart
+          import 'dart:async';
+          import 'package:flutter/material.dart';
+          import 'package:webview_flutter/webview_flutter.dart';
+          import 'package:flutter/services.dart';
+
+          void main() {
+            // Customize the system UI overlay style to set status bar color
+            SystemChrome.setSystemUIOverlayStyle(
+              SystemUiOverlayStyle(statusBarColor: Colors.black),
+            );
+            runApp(const MyApp());
+          }
+
+          class MyApp extends StatelessWidget {
+            const MyApp({super.key});
+
+            @override
+            Widget build(BuildContext context) {
+              return const MaterialApp(
+                debugShowCheckedModeBanner: false,
+                home: SplashScreen(), // SplashScreen as home screen
+              );
+            }
+          }
+
+          // SplashScreen Widget
+          class SplashScreen extends StatefulWidget {
+            const SplashScreen({super.key});
+
+            @override
+            _SplashScreenState createState() => _SplashScreenState();
+          }
+
+          class _SplashScreenState extends State<SplashScreen> {
+            @override
+            void initState() {
+              super.initState();
+              // Navigate to WebView after a delay of 3 seconds
+              _navigateToWebView();
+            }
+
+            Future<void> _navigateToWebView() async {
+              await Future.delayed(const Duration(seconds: 3));
+              // Push WebView screen after the delay
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(builder: (_) => const WebViewPage()),
+              );
+            }
+
+            @override
+            Widget build(BuildContext context) {
+              return Scaffold(
+                backgroundColor: Colors.white,
+                body: Center(
+                  child: Image.asset(
+                    'assets/images.png',
+                    width: 200,
+                    height: 200,
+                  ),
+                ),
+              );
+            }
+          }
+
+          // WebViewPage Widget
+          class WebViewPage extends StatefulWidget {
+            const WebViewPage({super.key});
+
+            @override
+            _WebViewPageState createState() => _WebViewPageState();
+          }
+
+          class _WebViewPageState extends State<WebViewPage> {
+            late WebViewController _webViewController;
+
+            @override
+            void initState() {
+              super.initState();
+              // Initialize WebView
+              _initializeWebView();
+            }
+
+            // Initialize WebView and its settings
+            void _initializeWebView() {
+              _webViewController = WebViewController()
+                ..setJavaScriptMode(
+                    JavaScriptMode.unrestricted) // Allow unrestricted JavaScript
+                ..setNavigationDelegate(
+                  NavigationDelegate(
+                    onProgress: (int progress) {
+                      // Handle page load progress here (e.g., update a loading bar)
+                      print('Page loading progress: $progress%');
+                    },
+                    onPageStarted: (String url) {
+                      print('Page started loading: $url');
+                    },
+                    onPageFinished: (String url) {
+                      print('Page finished loading: $url');
+                    },
+                    onNavigationRequest: (NavigationRequest request) {
+                      // Check if the URL uses 'http' or 'https' protocol
+                      if (request.url.startsWith('http://') ||
+                          request.url.startsWith('https://')) {
+                        // Block navigation to specific domains (e.g., YouTube)
+                        if (request.url.startsWith('https://www.youtube.com/')) {
+                          return NavigationDecision.prevent; // Prevent loading YouTube
+                        }
+                        return NavigationDecision
+                            .navigate; // Allow all other HTTP/HTTPS URLs
+                      } else {
+                        // Block any non-HTTP(S) URLs
+                        print('Blocked non-HTTP/HTTPS URL: ${request.url}');
+                        return NavigationDecision.prevent;
+                      }
+                    },
+                  ),
+                )
+                ..loadRequest(Uri.parse(
+                    'https://speed.propero.in/webapp')); // Load the Flutter website initially
+            }
+
+            @override
+            Widget build(BuildContext context) {
+              return Scaffold(
+                body: SafeArea(
+                  child: WebViewWidget(controller: _webViewController),
+                ),
+              );
+            }
+          }
+          EOF
+          echo "basicapp.dart created"
+      - name: Update AndroidManifest.xml
+        run: |
+            cd "$sanitized_project_name"
+            android_manifest="android/app/src/main/AndroidManifest.xml"
+
+            if [[ -f "$android_manifest" ]]; then
+                echo "Updating AndroidManifest.xml..."
+
+                # Add <uses-permission> if missing
+                if ! grep -q 'android.permission.INTERNET' "$android_manifest"; then
+                    sed -i '' '/<manifest xmlns:android/a\
+                    <uses-permission android:name="android.permission.INTERNET"/>\
+                    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>\
+                    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>' "$android_manifest"
+                fi
+
+                # Update the android:label dynamically
+                sed -i '' "s/android:label=\"[^\"]*\"/android:label=\"Propero\"/g" "$android_manifest"
+
+                echo "AndroidManifest.xml updated successfully."
+            else
+                echo "Error: AndroidManifest.xml not found at $android_manifest"
+                exit 1
+            fi
+
+
+      - name: Update Info.plist
+        run: |
+          cd "$sanitized_project_name"
+          info_plist="ios/Runner/Info.plist"
+          if [[ -f "$info_plist" ]]; then
+            echo "Updating Info.plist..."
+            /usr/libexec/PlistBuddy -c "Set :CFBundleName 'Propero'" "$info_plist" ||             /usr/libexec/PlistBuddy -c "Add :CFBundleName string 'Propero'" "$info_plist"
+            /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName 'Propero'" "$info_plist" ||             /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string 'Propero'" "$info_plist"
+            echo "Info.plist updated successfully."
+          else
+            echo "Error: Info.plist not found at $info_plist"
+            exit 1
+          fi
+      # Step 5: Create and push new branch with the sanitized project name
+      - name: Create and push new branch
+        run: |
+          # Configure Git user
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Create a new branch with the sanitized project name
+          git checkout -b "$sanitized_project_name"
+
+          # Commit changes
+          git add .
+          git commit -m "Initial commit for new project: $sanitized_project_name"
+
+          # Push the branch
+          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
+          git push origin "$sanitized_project_name"
+            # Step 6: Debug and run flutter pub get
+      - name: Debug and run flutter pub get
+        run: |
+          # Print the sanitized project name
+          echo "Sanitized project name: $sanitized_project_name"
+
+          # List the root directory contents
+          echo "Root directory contents:"
+          ls -la
+
+          # List the contents of the sanitized project directory
+          echo "Contents of sanitized project directory ($sanitized_project_name):"
+          ls -la "$sanitized_project_name" || echo "Directory does not exist"
+
+          echo "Checking assets directory:"
+          ls -la "$sanitized_project_name/assets"
+          # Navigate to the sanitized project directory
+          cd "$sanitized_project_name"
+
+          # Check if the assets directory exists
+          if [ -d "assets" ]; then
+            echo "Assets directory exists."
+          else
+            echo "Assets directory does not exist."
+          fi
+
+      - name: Validate Icon File
+        run: |
+          cd "$sanitized_project_name"
+          if [ ! -f "assets/images.png" ]; then
+            echo "Error: Icon file not found at assets/images.png."
+            exit 1
+          fi
+      - name: Install ImageMagick
+        run: |
+          brew install imagemagick
+
+      - name: Debugging Assets
+        run: |
+          cd "$sanitized_project_name"
+          ls -la assets/
+          file assets/images.png
+
+      - name: Convert AVIF to PNG
+        run: |
+          cd "$sanitized_project_name"
+          if [ -f "assets/images.png" ]; then
+            magick convert assets/images.png assets/images_converted.png
+            mv assets/images_converted.png assets/images.png
+            echo "Conversion to PNG successful."
+          else
+            echo "Error: Icon file not found at assets/images.png."
+            exit 1
+          fi
+
+      - name: Generate App Icons
+        run: |
+          cd "$sanitized_project_name"
+          flutter pub get
+          flutter pub run flutter_launcher_icons:main
+      # Step 9: Build the iOS app
+      - name: Build iOS App
+        run: |
+          echo "Current working directory: $(pwd)"
+          cd "$sanitized_project_name"
+          flutter build ipa --no-codesign
+
+      # Step 10: Package the IPA
+      - name: Package iOS IPA
+        run: |
+          echo "Current working directory: $(pwd)"
+          # Find Runner.app path
+          RUNNER_APP_PATH=$(find "$GITHUB_WORKSPACE/$sanitized_project_name/build" -name "Runner.app" -type d -print -quit)
+
+
+          if [ -z "$RUNNER_APP_PATH" ]; then
+            echo "Error: Runner.app not found!"
+            echo "Checking specific paths..."
+            ls -la build/ios/archive/Runner.xcarchive/Products/Applications/
+
+            exit 1
+          fi
+
+          echo "Runner.app found at: $RUNNER_APP_PATH"
+
+          # Package the app into a .ipa file
+          cd $(dirname "$RUNNER_APP_PATH")
+          mkdir -p Payload
+          mv Runner.app Payload/
+          zip -r app.ipa Payload
+          echo "app.ipa created"
+
+          # Move the IPA to a consistent location
+          IPA_PATH=$(pwd)/app.ipa
+          TARGET_DIR="${{ github.workspace }}/$sanitized_project_name/build/ios/ipa"
+          mkdir -p "$TARGET_DIR"
+          mv "$IPA_PATH" "$TARGET_DIR/app.ipa"
+
+          echo "app.ipa moved to: $TARGET_DIR"
+
+
+      # Step 7: Build the APK for Android
+      - name: Build Android APK
+        run: |
+          cd "$sanitized_project_name"
+          flutter build apk --release
+      - name: Build AAB File
+        run: |
+          cd "$sanitized_project_name"
+          flutter build appbundle --release
+
+      # - name: Generate JKS and PEPK Files
+      #   run: |
+      #     # Create the directory for the keystore files
+      #     mkdir -p ${{ github.workspace }}/${{ env.sanitized_project_name }}/build/app/outputs/keys
+
+      #     # Generate the keystore file (webapp.jks)
+      #     keytool -genkey -v             -keystore ${{ github.workspace }}/${{ env.sanitized_project_name }}/build/app/outputs/keys/webtoapp.jks             -keyalg RSA -keysize 2048 -validity 10000 -alias your-alias             -dname "CN=Your Name, OU=Your Org, O=Your Company, L=Your City, S=Your State, C=Your Country"             -storepass Propero@123 -keypass Propero@123
+
+      #     # Generate the PEPK file
+      #     echo "Generating PEPK file (simulated)" > ${{ github.workspace }}/${{ env.sanitized_project_name }}/build/app/outputs/keys/webtoapp.pepk
+
+
+      # - name: Sign the AAB
+      #   run: |
+      #     jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256             -keystore ${{ github.workspace }}/${{ env.sanitized_project_name }}/build/app/outputs/keys/webtoapp.jks             -storepass Propero@123             -keypass Propero@123             ${{ github.workspace }}/${{ env.sanitized_project_name }}/build/app/outputs/bundle/release/app-release.aab your-alias
+
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: WEBTOAPP
+          path: |
+            ${{ github.workspace }}/${{ env.sanitized_project_name }}/build/app/outputs/flutter-apk/app-release.apk
+            ${{ github.workspace }}/${{ env.sanitized_project_name }}/build/app/outputs/bundle/release/app-release.aab
+            ${{ github.workspace }}/${{ env.sanitized_project_name }}/build/app/outputs/keys/webtoapp.jks
+            ${{ github.workspace }}/${{ env.sanitized_project_name }}/build/app/outputs/keys/webtoapp.pepk
+            ${{ github.workspace }}/${{ env.sanitized_project_name }}/build/ios/ipa/app.ipa
+
+      - name: Prepare Artifacts
+        run: |
+          mkdir -p temp_artifacts
+          cp "${{ github.workspace }}/${{ env.sanitized_project_name }}/build/app/outputs/flutter-apk/app-release.apk" ./temp_artifacts/
+          cp "${{ github.workspace }}/${{ env.sanitized_project_name }}/build/app/outputs/bundle/release/app-release.aab" ./temp_artifacts/
+          cp "${{ github.workspace }}/${{ env.sanitized_project_name }}/build/app/outputs/keys/webtoapp.jks" ./temp_artifacts/
+          cp "${{ github.workspace }}/${{ env.sanitized_project_name }}/build/app/outputs/keys/webtoapp.pepk" ./temp_artifacts/
+          cp "${{ github.workspace }}/${{ env.sanitized_project_name }}/build/ios/ipa/app.ipa" ./temp_artifacts/
+
+      - name: Check Artifacts Content
+        run: |
+          echo "Checking if temp_artifacts contains only files..."
+          if find ./temp_artifacts -mindepth 1 -type d | read; then
+            echo "Error: Folders detected in temp_artifacts!"
+            exit 1
+          fi
+          echo "All good! Only files detected:"
+          ls -l ./temp_artifacts
+
+      - name: Zip Build Artifacts
+        run: |
+          mkdir -p artifacts
+          zip -r -9 -j artifacts/${{ env.sanitized_project_name }}.zip ./temp_artifacts/*
+
+      - name: Set up Service Account JSON
+        env:
+          SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_CREDENTIALS }}
+        run: |
+          echo "$SERVICE_ACCOUNT_JSON" > service-account.json
+          echo "Service account JSON set up."
+
+      # Set up Python environment
+      - name: Set up Python environment
+        run: |
+          python3 -m venv env  # Create a virtual environment
+          source env/bin/activate  # Activate the virtual environment
+          python3 -m pip install --upgrade pip  # Upgrade pip to the latest version
+
+      # Install required Google Drive API Python client libraries in the virtual environment
+      - name: Install Google Drive API Python client
+        run: |
+          source env/bin/activate  # Activate virtual environment
+          python3 -m pip install google-api-python-client google-auth-httplib2 google-auth-oauthlib
+
+      # Debugging: Check file existence
+      - name: Debug file check
+        run: |
+          echo "Checking if file exists..."
+          ls -l artifacts/${{ env.sanitized_project_name }}.zip
+          if [ ! -f artifacts/${{ env.sanitized_project_name }}.zip ]; then
+            echo "Error: ZIP file not found!"
+            exit 1
+          fi
+
+      - name: Upload to Google Drive
+        id: upload_drive
+        env:
+            FOLDER_ID: ${{ secrets.GOOGLE_DRIVE_ROOT_FOLDER_ID }}  # The target folder ID in Google Drive
+        run: |
+            source env/bin/activate  # Activate the virtual environment
+            python3 <<EOF
+            from googleapiclient.discovery import build
+            from googleapiclient.http import MediaFileUpload
+            from google.oauth2.service_account import Credentials
+            import os
+            import sys
+
+            # Define variables
+            service_account_file = 'service-account.json'
+            scopes = ['https://www.googleapis.com/auth/drive']
+            zip_file_path = 'artifacts/${{ env.sanitized_project_name }}.zip'
+            folder_id = '${{ secrets.GOOGLE_DRIVE_ROOT_FOLDER_ID }}'
+
+            try:
+                # Authenticate using the Service Account
+                print("✅ Authenticating Google Drive API...")
+                creds = Credentials.from_service_account_file(service_account_file, scopes=scopes)
+                drive_service = build('drive', 'v3', credentials=creds)
+                print("✅ Google Drive API Client authenticated successfully!")
+
+                # Check if the target folder ID exists
+                print(f"🔍 Verifying target folder ID: {folder_id}")
+                try:
+                    folder_info = drive_service.files().get(fileId=folder_id, fields='id, name').execute()
+                    print(f"✅ Target Folder found: {folder_info['name']} (ID: {folder_info['id']})")
+                except Exception as e:
+                    print(f"❌ Target Folder not found or inaccessible. Error: {e}")
+                    print("⚠️ Creating a new folder dynamically...")
+
+                    # Create a new folder
+                    folder_metadata = {
+                        'name': 'OutputFlutter',
+                        'mimeType': 'application/vnd.google-apps.folder'
+                    }
+                    folder = drive_service.files().create(body=folder_metadata, fields='id').execute()
+                    folder_id = folder.get('id')
+                    print(f"✅ New folder created successfully. Folder ID: {folder_id}")
+
+                # Verify the ZIP file to upload exists
+                if not os.path.exists(zip_file_path):
+                    print(f"❌ File not found at path: {zip_file_path}")
+                    sys.exit(1)
+                print(f"✅ File found: {zip_file_path}")
+
+                # Upload the file
+                print("⏳ Uploading file to Google Drive...")
+                file_metadata = {'name': os.path.basename(zip_file_path), 'parents': [folder_id]}
+                media = MediaFileUpload(zip_file_path, mimetype='application/zip')
+
+                uploaded_file = drive_service.files().create(
+                    body=file_metadata,
+                    media_body=media,
+                    fields='id, name'
+                ).execute()
+
+                # Generate direct link
+                file_id = uploaded_file.get('id')
+                file_link = f"https://drive.google.com/file/d/{file_id}/view?usp=sharing"
+
+                print(f"🎉 File uploaded successfully!")
+                print(f"🔗 File Name: {uploaded_file.get('name')}")
+                print(f"🆔 File ID: {file_id}")
+                print(f"::set-output name=drive_link::{file_link}")
+
+            except Exception as e:
+                print(f"❌ An error occurred: {e}")
+                sys.exit(1)
+            EOF
+
+      - name: Send email with ZIP attachment and Google Drive Link
+        uses: dawidd6/action-send-mail@v3.12.0
+        with:
+          server_address: ${{ secrets.SMTP_SERVER }}
+          server_port: ${{ secrets.PORT_NUM }}
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: "Your Web-to-App Build Artifacts Are Ready!"
+          to: rushikesh.sonake@proper.in
+          from: "PROPERO <${{ secrets.SMTP_USERNAME }}>"
+          body: |
+            Dear Customer,
+
+            Thank you for choosing our **Web-to-App conversion service**! We are thrilled to inform you that your application is now ready for download.
+
+            **What’s Included in This Delivery:**
+            - **Android APK File:** app-release.apk
+            - **Android AAB File:** app-release.aab
+            - **Keystore (JKS):** webtoapp.jks
+            - **PEPK File:** webtoapp.pepk
+            - **iOS IPA File:** app.ipa
+
+            **Access Your Files:**
+            Your build artifacts have been securely compiled and can be downloaded using the link below:
+            🔗 **[Download Your Files Here](${{ steps.upload_drive.outputs.drive_link }})**
+
+            These files are essential for publishing your application to Google Play and the Apple App Store. Ensure you keep them safe and secure.
+
+            **Next Steps:**
+            - For Android: Use the APK for testing and installation, the AAB for publishing on the Google Play Store, and JKS file for signing your app securely.
+            - For iOS: Use the IPA file to test and submit your app to the Apple App Store, and the PEPK file for securing and signing your app.
+
+            Should you have any questions or require assistance with publishing your app, our team is here to help! Don’t hesitate to reach out.
+
+            Thank you for trusting us to transform your website into a mobile app. We look forward to supporting your app journey.
+
+            Best regards,
+            **The Propero Team**
+            _(Accelerate Everything)_
+
+      # Step 13: Delete the branch
+      - name: Delete the branch
+        run: |
+          # Step 1: Check for uncommitted changes
+          if ! git diff-index --quiet HEAD --; then
+              echo "Uncommitted changes detected. Stashing changes..."
+              git stash
+          fi
+
+          # Step 2: Switch to the main branch
+          git checkout main
+
+
+          # Step 3: Delete the branch remotely
+          git push origin --delete "$sanitized_project_name"
+
+          echo "Branch '$sanitized_project_name' has been deleted."
+          
