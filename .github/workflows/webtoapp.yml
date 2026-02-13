@@ -35,7 +35,6 @@ jobs:
           cd "$sanitized_project_name"
           flutter pub add webview_flutter
           flutter pub add onesignal_flutter
-          flutter pub add flutter_launcher_icons --dev
 
       - name: Create Assets Folder
         run: |
@@ -95,12 +94,12 @@ jobs:
           }
           EOF
 
-      # 🔐 Decode Keystore
+      # 🔐 Decode Keystore (macOS compatible)
       - name: Decode Keystore
         run: |
           cd "$sanitized_project_name/android/app"
           echo "${{ secrets.KEYSTORE_BASE64 }}" > keystore.b64
-          base64 --decode keystore.b64 > release-key.jks
+          base64 -D -i keystore.b64 -o release-key.jks
           rm keystore.b64
 
       # 🔐 Create key.properties
@@ -117,7 +116,7 @@ jobs:
           cd "$sanitized_project_name"
           flutter build apk --release
 
-      - name: Build Android AAB
+      - name: Build Android AAB (Signed)
         run: |
           cd "$sanitized_project_name"
           flutter build appbundle --release
