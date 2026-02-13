@@ -414,22 +414,22 @@ jobs:
             exit 1
           fi
       # Step 5: Create and push new branch with the sanitized project name
-      - name: Create and push new branch
-        run: |
-          # Configure Git user
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+      # - name: Create and push new branch
+      #   run: |
+      #     # Configure Git user
+      #     git config --global user.name "github-actions[bot]"
+      #     git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-          # Create a new branch with the sanitized project name
-          git checkout -b "$sanitized_project_name"
+      #     # Create a new branch with the sanitized project name
+      #     git checkout -b "$sanitized_project_name"
 
-          # Commit changes
-          git add .
-          git commit -m "Initial commit for new project: $sanitized_project_name"
+      #     # Commit changes
+      #     git add .
+      #     git commit -m "Initial commit for new project: $sanitized_project_name"
 
-          # Push the branch
-          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
-          git push origin "$sanitized_project_name"
+      #     # Push the branch
+      #     git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
+      #     git push origin "$sanitized_project_name"
             # Step 6: Debug and run flutter pub get
       - name: Debug and run flutter pub get
         run: |
