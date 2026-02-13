@@ -565,8 +565,6 @@ jobs:
           path: |
             ${{ github.workspace }}/${{ env.sanitized_project_name }}/build/app/outputs/flutter-apk/app-release.apk
             ${{ github.workspace }}/${{ env.sanitized_project_name }}/build/app/outputs/bundle/release/app-release.aab
-            # ${{ github.workspace }}/${{ env.sanitized_project_name }}/build/app/outputs/keys/webtoapp.jks
-            # ${{ github.workspace }}/${{ env.sanitized_project_name }}/build/app/outputs/keys/webtoapp.pepk
             ${{ github.workspace }}/${{ env.sanitized_project_name }}/build/ios/ipa/app.ipa
 
       - name: Prepare Artifacts
@@ -574,8 +572,6 @@ jobs:
           mkdir -p temp_artifacts
           cp "${{ github.workspace }}/${{ env.sanitized_project_name }}/build/app/outputs/flutter-apk/app-release.apk" ./temp_artifacts/
           cp "${{ github.workspace }}/${{ env.sanitized_project_name }}/build/app/outputs/bundle/release/app-release.aab" ./temp_artifacts/
-          # cp "${{ github.workspace }}/${{ env.sanitized_project_name }}/build/app/outputs/keys/webtoapp.jks" ./temp_artifacts/
-          # cp "${{ github.workspace }}/${{ env.sanitized_project_name }}/build/app/outputs/keys/webtoapp.pepk" ./temp_artifacts/
           cp "${{ github.workspace }}/${{ env.sanitized_project_name }}/build/ios/ipa/app.ipa" ./temp_artifacts/
 
       - name: Check Artifacts Content
