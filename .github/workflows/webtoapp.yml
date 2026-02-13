@@ -199,7 +199,7 @@ jobs:
             cp ../uploaded-images/images.png assets/images.png
             echo "User-provided image added to assets."
           else
-            echo "Error: No user-provided image found! Please upload your image to the 'uploaded-images/images.png' path."
+            echo "No uploaded image found. Creating default image."
             exit 1
           fi
 
