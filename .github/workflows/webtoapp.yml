@@ -565,8 +565,8 @@ jobs:
           path: |
             ${{ github.workspace }}/${{ env.sanitized_project_name }}/build/app/outputs/flutter-apk/app-release.apk
             ${{ github.workspace }}/${{ env.sanitized_project_name }}/build/app/outputs/bundle/release/app-release.aab
-            ${{ github.workspace }}/${{ env.sanitized_project_name }}/build/app/outputs/keys/webtoapp.jks
-            ${{ github.workspace }}/${{ env.sanitized_project_name }}/build/app/outputs/keys/webtoapp.pepk
+            # ${{ github.workspace }}/${{ env.sanitized_project_name }}/build/app/outputs/keys/webtoapp.jks
+            # ${{ github.workspace }}/${{ env.sanitized_project_name }}/build/app/outputs/keys/webtoapp.pepk
             ${{ github.workspace }}/${{ env.sanitized_project_name }}/build/ios/ipa/app.ipa
 
       - name: Prepare Artifacts
@@ -574,8 +574,8 @@ jobs:
           mkdir -p temp_artifacts
           cp "${{ github.workspace }}/${{ env.sanitized_project_name }}/build/app/outputs/flutter-apk/app-release.apk" ./temp_artifacts/
           cp "${{ github.workspace }}/${{ env.sanitized_project_name }}/build/app/outputs/bundle/release/app-release.aab" ./temp_artifacts/
-          cp "${{ github.workspace }}/${{ env.sanitized_project_name }}/build/app/outputs/keys/webtoapp.jks" ./temp_artifacts/
-          cp "${{ github.workspace }}/${{ env.sanitized_project_name }}/build/app/outputs/keys/webtoapp.pepk" ./temp_artifacts/
+          # cp "${{ github.workspace }}/${{ env.sanitized_project_name }}/build/app/outputs/keys/webtoapp.jks" ./temp_artifacts/
+          # cp "${{ github.workspace }}/${{ env.sanitized_project_name }}/build/app/outputs/keys/webtoapp.pepk" ./temp_artifacts/
           cp "${{ github.workspace }}/${{ env.sanitized_project_name }}/build/ios/ipa/app.ipa" ./temp_artifacts/
 
       - name: Check Artifacts Content
@@ -593,12 +593,12 @@ jobs:
           mkdir -p artifacts
           zip -r -9 -j artifacts/${{ env.sanitized_project_name }}.zip ./temp_artifacts/*
 
-      - name: Set up Service Account JSON
-        env:
-          SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_CREDENTIALS }}
-        run: |
-          echo "$SERVICE_ACCOUNT_JSON" > service-account.json
-          echo "Service account JSON set up."
+      # - name: Set up Service Account JSON
+      #   env:
+      #     SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_CREDENTIALS }}
+      #   run: |
+      #     echo "$SERVICE_ACCOUNT_JSON" > service-account.json
+      #     echo "Service account JSON set up."
 
       # Set up Python environment
       - name: Set up Python environment
@@ -623,91 +623,91 @@ jobs:
             exit 1
           fi
 
-      - name: Upload to Google Drive
-        id: upload_drive
-        env:
-            FOLDER_ID: ${{ secrets.GOOGLE_DRIVE_ROOT_FOLDER_ID }}  # The target folder ID in Google Drive
-        run: |
-            source env/bin/activate  # Activate the virtual environment
-            python3 <<EOF
-            from googleapiclient.discovery import build
-            from googleapiclient.http import MediaFileUpload
-            from google.oauth2.service_account import Credentials
-            import os
-            import sys
+      # - name: Upload to Google Drive
+      #   id: upload_drive
+      #   env:
+      #       FOLDER_ID: ${{ secrets.GOOGLE_DRIVE_ROOT_FOLDER_ID }}  # The target folder ID in Google Drive
+      #   run: |
+      #       source env/bin/activate  # Activate the virtual environment
+      #       python3 <<EOF
+      #       from googleapiclient.discovery import build
+      #       from googleapiclient.http import MediaFileUpload
+      #       from google.oauth2.service_account import Credentials
+      #       import os
+      #       import sys
 
             # Define variables
-            service_account_file = 'service-account.json'
-            scopes = ['https://www.googleapis.com/auth/drive']
-            zip_file_path = 'artifacts/${{ env.sanitized_project_name }}.zip'
-            folder_id = '${{ secrets.GOOGLE_DRIVE_ROOT_FOLDER_ID }}'
+            # service_account_file = 'service-account.json'
+            # scopes = ['https://www.googleapis.com/auth/drive']
+            # zip_file_path = 'artifacts/${{ env.sanitized_project_name }}.zip'
+            # folder_id = '${{ secrets.GOOGLE_DRIVE_ROOT_FOLDER_ID }}'
 
-            try:
-                # Authenticate using the Service Account
-                print("✅ Authenticating Google Drive API...")
-                creds = Credentials.from_service_account_file(service_account_file, scopes=scopes)
-                drive_service = build('drive', 'v3', credentials=creds)
-                print("✅ Google Drive API Client authenticated successfully!")
+            # try:
+            #     # Authenticate using the Service Account
+            #     print("✅ Authenticating Google Drive API...")
+            #     creds = Credentials.from_service_account_file(service_account_file, scopes=scopes)
+            #     drive_service = build('drive', 'v3', credentials=creds)
+            #     print("✅ Google Drive API Client authenticated successfully!")
 
-                # Check if the target folder ID exists
-                print(f"🔍 Verifying target folder ID: {folder_id}")
-                try:
-                    folder_info = drive_service.files().get(fileId=folder_id, fields='id, name').execute()
-                    print(f"✅ Target Folder found: {folder_info['name']} (ID: {folder_info['id']})")
-                except Exception as e:
-                    print(f"❌ Target Folder not found or inaccessible. Error: {e}")
-                    print("⚠️ Creating a new folder dynamically...")
+            #     # Check if the target folder ID exists
+            #     print(f"🔍 Verifying target folder ID: {folder_id}")
+            #     try:
+            #         folder_info = drive_service.files().get(fileId=folder_id, fields='id, name').execute()
+            #         print(f"✅ Target Folder found: {folder_info['name']} (ID: {folder_info['id']})")
+            #     except Exception as e:
+            #         print(f"❌ Target Folder not found or inaccessible. Error: {e}")
+            #         print("⚠️ Creating a new folder dynamically...")
 
-                    # Create a new folder
-                    folder_metadata = {
-                        'name': 'OutputFlutter',
-                        'mimeType': 'application/vnd.google-apps.folder'
-                    }
-                    folder = drive_service.files().create(body=folder_metadata, fields='id').execute()
-                    folder_id = folder.get('id')
-                    print(f"✅ New folder created successfully. Folder ID: {folder_id}")
+            #         # Create a new folder
+            #         folder_metadata = {
+            #             'name': 'OutputFlutter',
+            #             'mimeType': 'application/vnd.google-apps.folder'
+            #         }
+            #         folder = drive_service.files().create(body=folder_metadata, fields='id').execute()
+            #         folder_id = folder.get('id')
+            #         print(f"✅ New folder created successfully. Folder ID: {folder_id}")
 
-                # Verify the ZIP file to upload exists
-                if not os.path.exists(zip_file_path):
-                    print(f"❌ File not found at path: {zip_file_path}")
-                    sys.exit(1)
-                print(f"✅ File found: {zip_file_path}")
+            #     # Verify the ZIP file to upload exists
+            #     if not os.path.exists(zip_file_path):
+            #         print(f"❌ File not found at path: {zip_file_path}")
+            #         sys.exit(1)
+            #     print(f"✅ File found: {zip_file_path}")
 
-                # Upload the file
-                print("⏳ Uploading file to Google Drive...")
-                file_metadata = {'name': os.path.basename(zip_file_path), 'parents': [folder_id]}
-                media = MediaFileUpload(zip_file_path, mimetype='application/zip')
+            #     # Upload the file
+            #     print("⏳ Uploading file to Google Drive...")
+            #     file_metadata = {'name': os.path.basename(zip_file_path), 'parents': [folder_id]}
+            #     media = MediaFileUpload(zip_file_path, mimetype='application/zip')
 
-                uploaded_file = drive_service.files().create(
-                    body=file_metadata,
-                    media_body=media,
-                    fields='id, name'
-                ).execute()
+            #     uploaded_file = drive_service.files().create(
+            #         body=file_metadata,
+            #         media_body=media,
+            #         fields='id, name'
+            #     ).execute()
 
-                # Generate direct link
-                file_id = uploaded_file.get('id')
-                file_link = f"https://drive.google.com/file/d/{file_id}/view?usp=sharing"
+            #     # Generate direct link
+            #     file_id = uploaded_file.get('id')
+            #     file_link = f"https://drive.google.com/file/d/{file_id}/view?usp=sharing"
 
-                print(f"🎉 File uploaded successfully!")
-                print(f"🔗 File Name: {uploaded_file.get('name')}")
-                print(f"🆔 File ID: {file_id}")
-                print(f"::set-output name=drive_link::{file_link}")
+            #     print(f"🎉 File uploaded successfully!")
+            #     print(f"🔗 File Name: {uploaded_file.get('name')}")
+            #     print(f"🆔 File ID: {file_id}")
+            #     print(f"::set-output name=drive_link::{file_link}")
 
-            except Exception as e:
-                print(f"❌ An error occurred: {e}")
-                sys.exit(1)
-            EOF
+            # except Exception as e:
+            #     print(f"❌ An error occurred: {e}")
+            #     sys.exit(1)
+            # EOF
 
-      - name: Send email with ZIP attachment and Google Drive Link
-        uses: dawidd6/action-send-mail@v3.12.0
-        with:
-          server_address: ${{ secrets.SMTP_SERVER }}
-          server_port: ${{ secrets.PORT_NUM }}
-          username: ${{ secrets.SMTP_USERNAME }}
-          password: ${{ secrets.SMTP_PASSWORD }}
-          subject: "Your Web-to-App Build Artifacts Are Ready!"
-          to: rushikesh.sonake@proper.in
-          from: "PROPERO <${{ secrets.SMTP_USERNAME }}>"
+      # - name: Send email with ZIP attachment and Google Drive Link
+      #   uses: dawidd6/action-send-mail@v3.12.0
+      #   with:
+      #     server_address: ${{ secrets.SMTP_SERVER }}
+      #     server_port: ${{ secrets.PORT_NUM }}
+      #     username: ${{ secrets.SMTP_USERNAME }}
+      #     password: ${{ secrets.SMTP_PASSWORD }}
+      #     subject: "Your Web-to-App Build Artifacts Are Ready!"
+      #     to: rushikesh.sonake@proper.in
+      #     from: "PROPERO <${{ secrets.SMTP_USERNAME }}>"
           body: |
             Dear Customer,
 
@@ -739,20 +739,20 @@ jobs:
             _(Accelerate Everything)_
 
       # Step 13: Delete the branch
-      - name: Delete the branch
-        run: |
-          # Step 1: Check for uncommitted changes
-          if ! git diff-index --quiet HEAD --; then
-              echo "Uncommitted changes detected. Stashing changes..."
-              git stash
-          fi
+      # - name: Delete the branch
+      #   run: |
+      #     # Step 1: Check for uncommitted changes
+      #     if ! git diff-index --quiet HEAD --; then
+      #         echo "Uncommitted changes detected. Stashing changes..."
+      #         git stash
+      #     fi
 
-          # Step 2: Switch to the main branch
-          git checkout main
+      #     # Step 2: Switch to the main branch
+      #     git checkout main
 
 
-          # Step 3: Delete the branch remotely
-          git push origin --delete "$sanitized_project_name"
+      #     # Step 3: Delete the branch remotely
+      #     git push origin --delete "$sanitized_project_name"
 
-          echo "Branch '$sanitized_project_name' has been deleted."
+      #     echo "Branch '$sanitized_project_name' has been deleted."
           
