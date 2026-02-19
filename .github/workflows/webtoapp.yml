@@ -26,8 +26,8 @@ jobs:
 
       - name: Create Flutter Project
         run: |
-          project_name="propero"
-          flutter create "$project_name"
+          project_name="webapp"
+          flutter create --org com.propero "$project_name"
           echo "sanitized_project_name=$project_name" >> $GITHUB_ENV
 
       - name: Add Dependencies
@@ -35,6 +35,12 @@ jobs:
           cd "$sanitized_project_name"
           flutter pub add webview_flutter
           flutter pub add onesignal_flutter
+      - name: Set App Version 
+        run: |
+            cd "$sanitized_project_name"
+            sed -i '' 's/^version:.*/version: 1.0.0+1/' pubspec.yaml
+     
+
 
       - name: Create Assets Folder
         run: |
@@ -111,20 +117,10 @@ jobs:
           echo "keyAlias=${{ secrets.KEY_ALIAS }}" >> key.properties
           echo "storeFile=app/release-key.jks" >> key.properties
 
-      - name: Build Android APK (Signed)
-        run: |
-          cd "$sanitized_project_name"
-          flutter build apk --release
-
       - name: Build Android AAB (Play Store Ready)
         run: |
           cd "$sanitized_project_name"
           flutter build appbundle --release
-
-      - name: Build iOS IPA (No Code Sign)
-        run: |
-          cd "$sanitized_project_name"
-          flutter build ipa --no-codesign
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
