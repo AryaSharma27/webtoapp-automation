@@ -117,10 +117,15 @@ jobs:
           echo "keyAlias=${{ secrets.KEY_ALIAS }}" >> key.properties
           echo "storeFile=app/release-key.jks" >> key.properties
 
-      - name: Build Android AAB (Play Store Ready)
+      - name: Build Android AAB
         run: |
           cd "$sanitized_project_name"
           flutter build appbundle --release
+
+      - name: Build Andrioud APK(release)
+        run: |
+          cd "$sanitized_project_name"
+          flutter build apk --release
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
